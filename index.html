@@ -908,6 +908,29 @@
 
 <script>
 /* ============== STATE & DATA ============== */
+const SUPABASE_URL = 'https://surynagvusmshbfxzdvx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cnluYWd2dXNtc2hiZnh6ZHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4NjI4NjgsImV4cCI6MjA5NjQzODg2OH0.MxAGfvcweoQVVc6D2BASiUxsNfK2QJB07efpTlStECg';
+
+// Menyimpan tiket akses admin setelah login berhasil
+let SUPABASE_TOKEN = null;
+ 
+async function loginSupabase(email, password) {
+  const res = await fetch(
+    SUPABASE_URL + "/auth/v1/token?grant_type=password",
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email: email, password: password })
+    }
+  );
+  if (!res.ok) return false;            // email/password salah
+  const data = await res.json();
+  SUPABASE_TOKEN = data.access_token;   // simpan tiket akses
+  return true;
+}
 
 const ADMIN_HASH = "8b1790b7d68efd5965d77b649e758f0ace27f11aacf8aca78f9dd6c919c3236a";
 
@@ -2936,9 +2959,35 @@ function clearDirty(){ try{ localStorage.removeItem('pmb_data_dirty'); }catch(e)
 function saveData(silent) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE.data));
+    pushToSupabase();   // kirim juga ke server Supabase
     if (!silent) markDirty();
     return true;
   } catch(e){ return false; }
+}
+// Mengirim seluruh data terbaru ke Supabase
+async function pushToSupabase() {
+  if (!SUPABASE_TOKEN) {
+    toast("Harap login dulu untuk menyimpan ke server", "error");
+    return;
+  }
+  const res = await fetch(
+    SUPABASE_URL + "/rest/v1/pmb_snapshot?id=eq.1",
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_TOKEN,  // pakai tiket admin
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      },
+      body: JSON.stringify({
+        data: STATE.data,
+        updated_at: new Date().toISOString()
+      })
+    }
+  );
+  if (res.ok) toast("Tersimpan ke server", "success");
+  else toast("Gagal menyimpan ke server", "error");
 }
 function resetData() {
   STATE.data = migrateData(clone(DEFAULT_DATA));
@@ -5933,9 +5982,20 @@ async function syncRemote() {
   // Dilewati bila admin punya editan lokal yang belum diekspor (dirty flag).
   try {
     if (localStorage.getItem('pmb_data_dirty') === '1') return;
-    const res = await fetch('pmb_perbanas_data_latest.json', { cache: 'no-store' });
-    if (!res.ok) return;
-    const obj = await res.json();
+  // Mengambil data dari Supabase (bukan lagi dari file JSON)
+  const res = await fetch(
+    SUPABASE_URL + "/rest/v1/pmb_snapshot?id=eq.1&select=data",
+    {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY
+      },
+      cache: "no-store"
+    }
+  );
+  if (!res.ok) return;
+  const hasil = await res.json();        // hasil berupa daftar berisi 1 baris
+  const obj = hasil[0] ? hasil[0].data : null;   // ambil isi kolom "data"
     if (!obj || !Array.isArray(obj.rows)) return;
     migrateData(obj);
     if (!obj.meta) obj.meta = clone(DEFAULT_DATA.meta);
