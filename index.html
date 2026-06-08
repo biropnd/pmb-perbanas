@@ -741,6 +741,10 @@
 
       <form id="admin-form" class="space-y-5">
         <div>
+          <label class="block eyebrow mb-2">Email admin</label>
+          <input id="admin-email" type="email" placeholder="email@perbanas.id" autocomplete="off" />
+        </div>
+        <div>
           <label class="block eyebrow mb-2">Kata sandi admin</label>
           <input id="admin-pwd" type="password" placeholder="••••••••" autocomplete="off" />
         </div>
@@ -6028,7 +6032,8 @@ async function init() {
   $('#admin-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const pwd = $('#admin-pwd').value;
-    const ok = await tryAdminLogin(pwd);
+    const email = $('#admin-email').value;
+    const ok = await tryAdminLogin(pwd) && await loginSupabase(email, pwd);
     if (ok) {
       $('#login-error').classList.add('hidden');
       loginAs('admin');
