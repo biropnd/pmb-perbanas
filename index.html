@@ -54,6 +54,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- PDF.js — dipakai untuk membaca text-layer PDF Laporan Realisasi PMB (fitur Import PDF) -->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+  if (window['pdfjsLib']) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  }
+</script>
 
 <style>
   :root {
@@ -638,6 +645,61 @@
     display: flex; align-items: center; justify-content: space-between; gap: .75rem;
     background: var(--perbanas-gray-50);
   }
+  /* Import PDF Realisasi PMB */
+  .pdfimp-steps {
+    display: flex; align-items: center; gap: .4rem;
+    margin-bottom: 1rem; flex-wrap: wrap;
+  }
+  .pdfimp-step {
+    font-size: .72rem; font-weight: 700; color: var(--perbanas-gray-500);
+    padding: .3rem .65rem; border-radius: 999px; background: var(--perbanas-gray-100);
+  }
+  .pdfimp-step.active { background: var(--perbanas-blue-deep); color: #fff; }
+  .pdfimp-step.done { background: #DCFCE7; color: #166534; }
+  .pdfimp-dropzone {
+    border: 2px dashed var(--perbanas-gray-200);
+    border-radius: 16px;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    background: var(--perbanas-gray-50, #F8FAFC);
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  .pdfimp-dropzone:hover, .pdfimp-dropzone.dragover {
+    border-color: var(--perbanas-blue-deep);
+    background: var(--perbanas-blue-soft, #EEF3FA);
+  }
+  .pdfimp-dropzone.dragover { transform: scale(1.01); }
+  .pdfimp-tabs { display: flex; gap: .25rem; margin-bottom: 1rem; border-bottom: 1px solid var(--perbanas-gray-100); }
+  .pdfimp-tab {
+    padding: .55rem .9rem; font-size: .82rem; font-weight: 700; color: var(--perbanas-gray-500);
+    cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .pdfimp-tab.active { color: var(--perbanas-blue-deep); border-bottom-color: var(--perbanas-blue-deep); }
+  .pdfimp-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  .pdfimp-table th {
+    text-align: left; padding: .5rem .6rem; background: var(--perbanas-gray-50, #F8FAFC);
+    border-bottom: 1px solid var(--perbanas-gray-200); font-size: .68rem; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--perbanas-gray-500); position: sticky; top: 0;
+  }
+  .pdfimp-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--perbanas-gray-100); vertical-align: middle; }
+  .pdfimp-table select {
+    border: 1px solid var(--perbanas-gray-200); border-radius: 8px; padding: .3rem .5rem; font-size: .78rem; width: 100%;
+  }
+  .pdfimp-summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: .75rem;
+  }
+  .pdfimp-summary-card {
+    border: 1px solid var(--perbanas-gray-200); border-radius: 12px; padding: .75rem .9rem; background: white;
+  }
+  .pdfimp-summary-card .lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--perbanas-gray-500); font-weight: 700; }
+  .pdfimp-summary-card .val { font-size: 1.3rem; font-weight: 800; color: var(--perbanas-blue-deep); }
+  .pdfimp-badge-warn { background:#FEF3C7; color:#92400E; padding:.1rem .5rem; border-radius:999px; font-size:.68rem; font-weight:700; }
+  .pdfimp-badge-ok { background:#DCFCE7; color:#166534; padding:.1rem .5rem; border-radius:999px; font-size:.68rem; font-weight:700; }
+  .pdfimp-badge-err { background:#FEE2E2; color:#991B1B; padding:.1rem .5rem; border-radius:999px; font-size:.68rem; font-weight:700; }
+  .pdfimp-hist-row { padding:.6rem .9rem; border-bottom:1px solid var(--perbanas-gray-100); font-size:.8rem; display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+  .pdfimp-hist-row:last-child { border-bottom: 0; }
+
   .ovr-toolbar {
     display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
     margin-bottom: .9rem;
@@ -748,7 +810,7 @@
           <label class="block eyebrow mb-2">Kata sandi admin</label>
           <input id="admin-pwd" type="password" placeholder="••••••••" autocomplete="off" />
         </div>
-        <div id="login-error" class="text-xs text-red-600 font-medium hidden">Kata sandi salah. Coba lagi.</div>
+        <div id="login-error" class="text-xs text-red-600 font-medium hidden">Email atau kata sandi admin salah. Coba lagi.</div>
         <button type="submit" class="btn btn-primary w-full justify-center py-3">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>
           Login sebagai Admin
@@ -756,7 +818,7 @@
       </form>
 
       <p class="text-[11px] text-ink-500 mt-8 leading-relaxed">
-        Validasi password menggunakan SHA-256 di sisi klien.<br/>Sesi disimpan di <code class="bg-ink-100 px-1 rounded text-ink-700">sessionStorage</code>.
+        Login admin menggunakan Supabase Auth.<br/>Sesi tampilan disimpan di <code class="bg-ink-100 px-1 rounded text-ink-700">sessionStorage</code>.
       </p>
     </div>
   </div>
@@ -823,6 +885,12 @@
           </button>
           <div class="admin-only-action px-3 pb-2 pt-0.5 text-[10px] text-gray-400">Pilih file <code>.json</code> hasil ekspor sebelumnya.</div>
           <input type="file" id="hdr-import-input" accept=".json,application/json" class="hidden" onchange="importJSON(event)" />
+          <button class="admin-only-action w-full text-left px-3 py-2 text-sm hover:bg-ink-50 flex items-center gap-2" onclick="openPdfImportModal(); closeExportMenu()">
+            <svg class="w-4 h-4" style="color:#5C7D1F" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9.5 13.5h1.2a1.3 1.3 0 0 0 0-2.6H9.5v5.2"/><path d="M13.2 16.1v-5.2h1a1.75 1.75 0 0 1 0 3.5h-1"/><path d="M17 10.9v5.2M17 13.3h1.4"/></svg>
+            <span class="font-medium">Import PDF Realisasi PMB</span>
+            <span class="pill pill-lime ml-auto" style="padding:.1rem .4rem;font-size:.62rem;">admin</span>
+          </button>
+          <div class="admin-only-action px-3 pb-2 pt-0.5 text-[10px] text-gray-400">Unggah laporan PDF realisasi dari unit PMB — parsing &amp; update otomatis.</div>
         </div>
       </div>
 
@@ -912,6 +980,10 @@
 
 <script>
 /* ============== STATE & DATA ============== */
+// Sumber data utama dashboard: file JSON di folder GitHub Pages yang sama.
+const DATA_URL = './pmb_perbanas_data_latest.json';
+
+// Supabase hanya dipakai untuk autentikasi admin (Supabase Auth), bukan untuk data dashboard.
 const SUPABASE_URL = 'https://surynagvusmshbfxzdvx.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cnluYWd2dXNtc2hiZnh6ZHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4NjI4NjgsImV4cCI6MjA5NjQzODg2OH0.MxAGfvcweoQVVc6D2BASiUxsNfK2QJB07efpTlStECg';
 
@@ -936,7 +1008,6 @@ async function loginSupabase(email, password) {
   return true;
 }
 
-const ADMIN_HASH = "8b1790b7d68efd5965d77b649e758f0ace27f11aacf8aca78f9dd6c919c3236a";
 
 const SCHEMA_VERSION = "4.0";
 const SCENARIO_DEFAULTS = { konservatif: 0.90, moderat: 1.00, optimistis: 1.05 };
@@ -2813,7 +2884,7 @@ const DEFAULT_DATA = {
   }
 };
 
-const STORAGE_KEY = 'pmb_perbanas_data_v2';
+const STORAGE_KEY = 'pmb_perbanas_data_v4';
 const STATE = {
   data: null,
   role: null, // 'guest' | 'admin'
@@ -2963,36 +3034,18 @@ function clearDirty(){ try{ localStorage.removeItem('pmb_data_dirty'); }catch(e)
 function saveData(silent) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE.data));
-    pushToSupabase();   // kirim juga ke server Supabase
+    // Data tidak dikirim ke Supabase. Supabase hanya untuk login admin.
+    // Agar perubahan menjadi permanen, ekspor JSON lalu push sebagai
+    // pmb_perbanas_data_latest.json ke GitHub.
     if (!silent) markDirty();
     return true;
-  } catch(e){ return false; }
+  } catch (e) {
+    console.error('Gagal menyimpan data lokal:', e);
+    return false;
+  }
 }
 // Mengirim seluruh data terbaru ke Supabase
-async function pushToSupabase() {
-  if (!SUPABASE_TOKEN) {
-    toast("Harap login dulu untuk menyimpan ke server", "error");
-    return;
-  }
-  const res = await fetch(
-    SUPABASE_URL + "/rest/v1/pmb_snapshot?id=eq.1",
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + SUPABASE_TOKEN,  // pakai tiket admin
-        "Content-Type": "application/json",
-        Prefer: "return=minimal"
-      },
-      body: JSON.stringify({
-        data: STATE.data,
-        updated_at: new Date().toISOString()
-      })
-    }
-  );
-  if (res.ok) toast("Tersimpan ke server", "success");
-  else toast("Gagal menyimpan ke server", "error");
-}
+
 function resetData() {
   STATE.data = migrateData(clone(DEFAULT_DATA));
   syncAllDerived(STATE.data);
@@ -3016,9 +3069,9 @@ async function sha256(str) {
   return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-async function tryAdminLogin(pwd) {
-  const h = await sha256(pwd);
-  return h === ADMIN_HASH;
+async function tryAdminLogin() {
+  // Dipertahankan untuk kompatibilitas kode lama. Login admin sekarang memakai Supabase Auth.
+  return false;
 }
 
 function loginAs(role) {
@@ -5450,6 +5503,713 @@ function importJSON(ev) {
 </script>
 
 <script>
+/* ==============================================================
+   IMPORT PDF REALISASI PMB
+   ------------------------------------------------------------
+   Membaca laporan PDF "Perbandingan Pendaftar & NIM" dari unit PMB
+   (text-layer, tanpa OCR — via PDF.js), memetakan tiap baris prodi
+   ke schema JSON yang sudah ada (STATE.data.rows[].batches), lalu
+   memicu refresh dashboard lewat jalur navigate() yang sama dipakai
+   fitur Impor JSON. Hanya field pendaftar & NIM yang diperbarui —
+   target, proyeksi, pacing, dan skenario tidak pernah disentuh.
+   ============================================================== */
+
+// Kunci penyimpanan lokal khusus fitur ini
+const PDFIMP_MAP_KEY  = 'pmb_pdf_prodi_mapping_v1';   // mapping prodi PDF → kode prodi JSON (persisten)
+const PDFIMP_HIST_KEY = 'pmb_pdf_import_history_v1';  // riwayat import PDF
+
+// Label periode batch yang dikenali pada tabel Ekstensi & Pasca
+const PDF_PERIOD_LABELS = ['Maret', 'Juli', 'November'];
+
+// Sinonim nama prodi PDF → nama baku (dinormalisasi) yang dipakai di prodi_fullname.
+// Selisih kapital/spasi/tanda baca sudah ditangani oleh pdfimpNormalize(); tabel ini
+// hanya untuk sinonim istilah yang benar-benar berbeda kata.
+const PDF_PRODI_ALIASES = {
+  'SAINS DATA': 'ANALITIKA DATA BISNIS',
+  'AKUNTANSI PERPAJAKAN': 'D3 AKUNTANSI PAJAK',
+  'KEUANGAN PERBANKAN': 'D3 KEUANGAN DAN PERBANKAN',
+  'MAGISTER AKUNTANSI': 'MAKSI',
+  'PROFESI AKUNTANSI': 'PENDIDIKAN PROFESI AKUNTANSI',
+};
+
+// State modal (di-reset setiap kali modal dibuka)
+const PDFIMP_STATE = {
+  step: 'upload',          // upload | parsing | mapping | preview | done | error
+  tab: 'import',           // import | riwayat
+  fileName: '',
+  warnings: [],
+  importYear: null,
+  resolved: [],            // baris yang berhasil dipetakan ke kode prodi
+  unresolved: [],          // baris yang butuh mapping manual
+  unresolvedChoices: {},   // key -> kode prodi pilihan admin
+  applyResult: null,
+  errorMsg: '',
+};
+
+/* ----- Normalisasi & mapping nama prodi ----- */
+
+/**
+ * Normalisasi nama prodi dari teks PDF: hilangkan kapital/spasi/tanda baca/
+ * karakter khusus serta kata kualifier yang tidak mengubah identitas prodi
+ * (KARYAWAN, INTENSIF, lokasi, dsb). Bagian setelah "KERJASAMA" dibuang
+ * karena hanya menandai varian kemitraan, bukan prodi baru.
+ */
+function pdfimpNormalize(raw) {
+  let s = (raw || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  s = s.split('KERJASAMA')[0];
+  s = s.replace(/&/g, ' DAN ').replace(/[().,;:'"\/\\_]/g, ' ').replace(/-/g, ' ');
+  s = s.replace(/\b(KAMPUS|JAKARTA|BEKASI|KARYAWAN|INTENSIF|PROGRAM|SEKOLAH)\b/g, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+/** Daftar prodi existing (kode + label + baris) untuk kombinasi kelas+lokasi tertentu. */
+function pdfimpCandidatesFor(kelas, lokasi) {
+  return STATE.data.rows
+    .filter(r => r.kelas === kelas && r.lokasi === lokasi)
+    .map(r => ({ code: r.prodi, label: prodiFull(r.prodi), norm: pdfimpNormalize(prodiFull(r.prodi)), row: r }));
+}
+
+/**
+ * Skor "aktivitas" sebuah baris prodi — dipakai sebagai default pilihan saat
+ * satu nama PDF bisa cocok ke beberapa baris JSON (mis. Magister Manajemen
+ * Reguler vs Ekstensi). Baris yang datanya lebih baru/lebih banyak terisi
+ * mendapat skor lebih tinggi, sesuai preferensi: isi ke varian yang memang
+ * sudah biasa diisi sebelumnya.
+ */
+function pdfimpActivityScore(row) {
+  const r24 = +row.r2024 || 0, r25 = +row.r2025 || 0, r26 = +row.r2026 || 0, p26 = +row.p2026 || 0;
+  return r26 * 4 + p26 * 2 + r25 * 1.5 + r24;
+}
+
+/**
+ * Pilihan default saat prodi ambigu (beberapa baris JSON cocok, mis. Magister
+ * Manajemen Reguler vs Ekstensi). Diprioritaskan kandidat yang namanya memang
+ * "sekeluarga" dengan teks PDF (mis. hanya "MM Reg"/"MM Eks" untuk "Magister
+ * Manajemen", bukan seluruh prodi Pasca); di antara kandidat sekeluarga itu,
+ * dipilih yang datanya paling sering/baru diisi sebelumnya.
+ */
+function pdfimpDefaultCandidate(candidates, normName) {
+  if (!candidates.length) return null;
+  const keyBase = PDF_PRODI_ALIASES[normName] || normName;
+  const family = candidates.filter(c => c.norm.includes(keyBase) || keyBase.includes(c.norm));
+  const pool = family.length ? family : candidates;
+  return pool.slice().sort((a, b) => pdfimpActivityScore(b.row) - pdfimpActivityScore(a.row))[0].code;
+}
+
+/** Coba petakan otomatis (cocok persis / alias) — null jika ambigu atau tidak ditemukan. */
+function pdfimpAutoMap(kelas, lokasi, normName) {
+  const candidates = pdfimpCandidatesFor(kelas, lokasi);
+  const exact = candidates.filter(c => c.norm === normName);
+  if (exact.length === 1) return { code: exact[0].code, method: 'otomatis (cocok persis)' };
+  const aliasTarget = PDF_PRODI_ALIASES[normName];
+  if (aliasTarget) {
+    const aliased = candidates.filter(c => c.norm === aliasTarget);
+    if (aliased.length === 1) return { code: aliased[0].code, method: 'otomatis (alias)' };
+  }
+  return null;
+}
+
+function pdfimpGetPersistedMap() {
+  try { return JSON.parse(localStorage.getItem(PDFIMP_MAP_KEY) || '{}'); } catch (e) { return {}; }
+}
+function pdfimpSavePersistedMap(map) {
+  try { localStorage.setItem(PDFIMP_MAP_KEY, JSON.stringify(map)); } catch (e) {}
+}
+
+/* ----- Ekstraksi teks PDF (text-layer via PDF.js) ----- */
+
+/**
+ * Ambil seluruh text item tiap halaman PDF lalu kelompokkan menjadi baris
+ * berdasarkan koordinat Y (posisi baris di halaman), diurutkan atas→bawah
+ * dan kiri→kanan. Ini menjadi dasar deteksi tabel tanpa hardcode posisi.
+ */
+async function pdfimpExtractRows(pdfDoc) {
+  const pages = [];
+  for (let p = 1; p <= pdfDoc.numPages; p++) {
+    const page = await pdfDoc.getPage(p);
+    const content = await page.getTextContent();
+    const items = content.items
+      .map(it => ({ text: it.str, x: it.transform[4], y: it.transform[5] }))
+      .filter(it => it.text && it.text.trim() !== '');
+    items.sort((a, b) => (b.y - a.y) || (a.x - b.x));
+    const TOL = 3;
+    const rows = [];
+    for (const it of items) {
+      let row = rows.find(r => Math.abs(r.y - it.y) <= TOL);
+      if (!row) { row = { y: it.y, items: [] }; rows.push(row); }
+      row.items.push(it);
+    }
+    rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+    pages.push({ pageNum: p, rows });
+  }
+  return pages;
+}
+
+function pdfimpRowText(row) {
+  return row.items.map(it => it.text).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Parser utama. Menyusuri baris per halaman dengan state machine sederhana:
+ * - deteksi konteks kelas (Reguler/Ekstensi/Pasca) & lokasi (Jakarta/Bekasi)
+ *   dari baris judul seksi (pencarian kata kunci, bukan posisi tetap);
+ * - deteksi baris "anchor" kolom (posisi X kata Pendaftar/NIM atau
+ *   Maret/Juli/November) — anchor ini "lengket" sampai ditemukan anchor baru,
+ *   sehingga tetap valid walau posisi tabel bergeser sedikit di PDF berikutnya;
+ *   sistem otomatis mengikuti struktur kolom yang ada di BATCHES;
+ * - setiap angka pada baris data dipetakan ke kolom TERDEKAT secara posisi
+ *   (bukan berdasar urutan), sehingga kolom yang kosong tidak menggeser
+ *   pemetaan kolom lain.
+ */
+function pdfimpParse(pages) {
+  const warnings = [];
+  const rawExtract = [];
+  let kelas = null, lokasi = null, anchors = null;
+  let importYearGuess = null, sawAnyTable = false;
+
+  for (const page of pages) {
+    for (const row of page.rows) {
+      const t = pdfimpRowText(row);
+      const ym = t.match(/s\.?d\.?\s+\d{1,2}\s+\w+\s+(\d{4})/i);
+      if (ym) importYearGuess = ym[1];
+    }
+    const pageHasMarker = page.rows.some(r => /REGULER|EKSTENSI|PASCASARJANA/i.test(pdfimpRowText(r)));
+    if (!pageHasMarker) continue; // halaman grafik/non-tabel — lewati
+
+    for (const row of page.rows) {
+      const text = pdfimpRowText(row);
+      if (!text) continue;
+
+      // Deteksi konteks kelas + lokasi dari baris judul seksi
+      const secMatch = text.match(/\b(REGULER|EKSTENSI|PASCASARJANA)\b.*\b(JAKARTA|BEKASI)\b/i);
+      if (secMatch) {
+        const kw = secMatch[1].toUpperCase();
+        kelas = kw === 'REGULER' ? 'Reguler' : kw === 'EKSTENSI' ? 'Ekstensi' : 'Pasca';
+        lokasi = /JAKARTA/i.test(secMatch[2]) ? 'Jakarta' : 'Bekasi';
+      }
+      const pascaSec = text.match(/SEKOLAH PASCASARJANA KAMPUS\s+(JAKARTA|BEKASI)/i);
+      if (pascaSec) { kelas = 'Pasca'; lokasi = /JAKARTA/i.test(pascaSec[1]) ? 'Jakarta' : 'Bekasi'; }
+
+      if (/^JUMLAH\b/i.test(text)) continue; // baris agregat — realisasi diambil per prodi, bukan dari total
+      if (/^(Noted|Data Sudah|Grafik)\b/i.test(text)) { kelas = null; lokasi = null; anchors = null; continue; }
+
+      // Deteksi baris anchor kolom — dicek SEBELUM gate "kelas belum diketahui" karena pada
+      // banyak PDF (mis. seksi Reguler) baris header "Pendaftar/NIM" muncul sebelum baris
+      // judul seksi kelas+lokasi. Tanpa kelas, pola default single-batch (Tahunan) dipakai.
+      const batchList = BATCHES[kelas] || ['Tahunan'];
+      if (batchList.length > 1) {
+        const periodHits = [];
+        for (const it of row.items) {
+          const label = PDF_PERIOD_LABELS.find(pl => pl.toLowerCase() === it.text.trim().toLowerCase());
+          if (label) periodHits.push({ label, x: it.x });
+        }
+        if (periodHits.length >= 2) {
+          periodHits.sort((a, b) => a.x - b.x);
+          const half = Math.ceil(periodHits.length / 2);
+          anchors = { pendaftar: {}, nim: {} };
+          periodHits.slice(0, half).forEach(h => anchors.pendaftar[h.label] = h.x);
+          periodHits.slice(half).forEach(h => anchors.nim[h.label] = h.x);
+          sawAnyTable = true;
+          continue;
+        }
+      } else {
+        const pIt = row.items.find(it => /^Pendaftar$/i.test(it.text.trim()));
+        const nIt = row.items.find(it => /^NIM$/i.test(it.text.trim()));
+        if (pIt && nIt) {
+          anchors = { pendaftar: { Tahunan: pIt.x }, nim: { Tahunan: nIt.x } };
+          sawAnyTable = true;
+          continue;
+        }
+      }
+
+      if (!anchors) continue; // belum ada anchor kolom aktif untuk seksi ini
+      if (!kelas) continue; // anchor sudah ada tapi konteks kelas/lokasi belum diketahui — lewati baris ini
+
+      // Baris data prodi: pisahkan token angka dari token nama prodi
+      const numTokens = [];
+      const textTokens = [];
+      row.items.forEach((it, idx) => {
+        const raw = it.text.trim();
+        if (/^\d+$/.test(raw)) {
+          if (idx === 0 && raw.length >= 4) return; // kode prodi di kolom pertama, bukan data
+          numTokens.push({ v: +raw, x: it.x });
+        } else {
+          textTokens.push(raw);
+        }
+      });
+      if (numTokens.length === 0) continue; // baris tanpa angka (varian kosong)
+
+      const prodiRaw = textTokens.join(' ').replace(/\s+/g, ' ').trim();
+      if (!prodiRaw) continue;
+      const prodiNorm = pdfimpNormalize(prodiRaw);
+      if (!prodiNorm) continue;
+
+      const allAnchors = [
+        ...Object.keys(anchors.pendaftar).map(b => ({ type: 'pendaftar', batch: b, x: anchors.pendaftar[b] })),
+        ...Object.keys(anchors.nim).map(b => ({ type: 'nim', batch: b, x: anchors.nim[b] })),
+      ].sort((a, b) => a.x - b.x);
+      let minGap = Infinity;
+      for (let i = 1; i < allAnchors.length; i++) minGap = Math.min(minGap, allAnchors[i].x - allAnchors[i - 1].x);
+      const maxDist = isFinite(minGap) ? Math.max(20, minGap * 0.7) : 40;
+
+      const values = {};
+      let anyMapped = false;
+      for (const nt of numTokens) {
+        let best = null, bestDist = Infinity;
+        for (const a of allAnchors) {
+          const d = Math.abs(a.x - nt.x);
+          if (d < bestDist) { bestDist = d; best = a; }
+        }
+        if (best && bestDist <= maxDist) {
+          if (!values[best.batch]) values[best.batch] = {};
+          values[best.batch][best.type] = nt.v;
+          anyMapped = true;
+        } else {
+          warnings.push(`Angka "${nt.v}" pada baris "${prodiRaw}" (${kelas}/${lokasi}) tidak dapat dipetakan ke kolom manapun — diabaikan.`);
+        }
+      }
+      if (!anyMapped) continue;
+
+      rawExtract.push({ kelas, lokasi, prodiRaw, prodiNorm, values });
+    }
+  }
+
+  return { rawExtract, warnings, importYearGuess, sawAnyTable };
+}
+
+/* ----- Pengelompokan, mapping, agregasi ----- */
+
+/** Kelompokkan baris mentah per (kelas, lokasi, nama-ternormalisasi) — menangani kasus
+ *  satu prodi tertulis di beberapa baris PDF (mis. "Karyawan" + "Intensif"). */
+function pdfimpGroupRaw(rawExtract) {
+  const groups = {};
+  for (const item of rawExtract) {
+    const key = `${item.kelas}|${item.lokasi}|${item.prodiNorm}`;
+    if (!groups[key]) groups[key] = { key, kelas: item.kelas, lokasi: item.lokasi, prodiNorm: item.prodiNorm, prodiRawSamples: new Set(), valuesList: [] };
+    groups[key].prodiRawSamples.add(item.prodiRaw);
+    groups[key].valuesList.push(item.values);
+  }
+  return Object.values(groups);
+}
+
+/** Gabungkan beberapa baris PDF yang merujuk ke prodi sama — jumlahkan tiap batch. */
+function pdfimpAggregateValues(valuesList) {
+  const acc = {};
+  for (const values of valuesList) {
+    for (const batch of Object.keys(values)) {
+      if (!acc[batch]) acc[batch] = { pendaftarSum: 0, pendaftarAny: false, nimSum: 0 };
+      const v = values[batch];
+      if (v.pendaftar != null) { acc[batch].pendaftarSum += v.pendaftar; acc[batch].pendaftarAny = true; }
+      if (v.nim != null) acc[batch].nimSum += v.nim;
+    }
+  }
+  const out = {};
+  for (const batch of Object.keys(acc)) {
+    out[batch] = { pendaftar: acc[batch].pendaftarAny ? acc[batch].pendaftarSum : null, nim: acc[batch].nimSum };
+  }
+  return out;
+}
+
+/** Petakan tiap grup ke kode prodi JSON: mapping tersimpan → otomatis → butuh input manual. */
+function pdfimpResolveGroups(groups, persistedMap) {
+  const resolved = [], unresolved = [];
+  for (const g of groups) {
+    let code = null, method = null;
+    if (persistedMap[g.key]) {
+      const stillValid = STATE.data.rows.some(r => r.kelas === g.kelas && r.lokasi === g.lokasi && r.prodi === persistedMap[g.key]);
+      if (stillValid) { code = persistedMap[g.key]; method = 'tersimpan dari mapping sebelumnya'; }
+    }
+    if (!code) {
+      const auto = pdfimpAutoMap(g.kelas, g.lokasi, g.prodiNorm);
+      if (auto) { code = auto.code; method = auto.method; }
+    }
+    const values = pdfimpAggregateValues(g.valuesList);
+    const prodiRaw = [...g.prodiRawSamples].join(' / ');
+    if (code) {
+      resolved.push({ key: g.key, kelas: g.kelas, lokasi: g.lokasi, prodiCode: code, prodiLabel: prodiFull(code), prodiRaw, values, mapMethod: method });
+    } else {
+      const candidates = pdfimpCandidatesFor(g.kelas, g.lokasi);
+      const defaultCode = pdfimpDefaultCandidate(candidates, g.prodiNorm);
+      unresolved.push({ key: g.key, kelas: g.kelas, lokasi: g.lokasi, prodiRaw, prodiNorm: g.prodiNorm, candidates, defaultCode, values });
+    }
+  }
+  return { resolved, unresolved };
+}
+
+/* ----- Terapkan ke STATE.data (hanya realisasi: pendaftar & NIM) ----- */
+
+function pdfimpApply(resolved, importYear) {
+  const touchedRows = new Set();
+  let totalPendaftar = 0, totalNim = 0;
+  for (const item of resolved) {
+    const row = STATE.data.rows.find(r => r.kelas === item.kelas && r.lokasi === item.lokasi && r.prodi === item.prodiCode);
+    if (!row) continue;
+    if (!row.batches[importYear]) row.batches[importYear] = {};
+    for (const batch of Object.keys(item.values)) {
+      const v = item.values[batch];
+      // Hanya realisasi (pendaftar/NIM) yang ditulis — target, projection_scenarios & pacing tidak disentuh.
+      row.batches[importYear][batch] = { pendaftar: v.pendaftar, nim: v.nim };
+      totalPendaftar += v.pendaftar || 0;
+      totalNim += v.nim || 0;
+    }
+    touchedRows.add(row);
+  }
+  touchedRows.forEach(syncDerivedFields);
+  return { touchedRowsCount: touchedRows.size, totalPendaftar, totalNim };
+}
+
+/* ----- Riwayat import ----- */
+
+function pdfimpGetHistory() { try { return JSON.parse(localStorage.getItem(PDFIMP_HIST_KEY) || '[]'); } catch (e) { return []; } }
+function pdfimpSaveHistory(list) { try { localStorage.setItem(PDFIMP_HIST_KEY, JSON.stringify(list)); } catch (e) {} }
+function pdfimpAddHistoryEntry(entry) { const list = pdfimpGetHistory(); list.unshift(entry); pdfimpSaveHistory(list.slice(0, 50)); }
+function pdfimpDeleteHistoryEntry(id) { pdfimpSaveHistory(pdfimpGetHistory().filter(h => h.id !== id)); }
+function pdfimpClearHistory() { pdfimpSaveHistory([]); }
+function pdfimpClearHistoryConfirm() { if (confirm('Hapus seluruh riwayat import PDF?')) { pdfimpClearHistory(); pdfimpRenderBody(); } }
+
+/* ----- Modal: Import PDF Realisasi PMB ----- */
+
+function pdfimpResetState() {
+  Object.assign(PDFIMP_STATE, {
+    step: 'upload', tab: 'import', fileName: '', warnings: [], importYear: null,
+    resolved: [], unresolved: [], unresolvedChoices: {}, applyResult: null, errorMsg: '',
+  });
+}
+
+function openPdfImportModal() {
+  if (!isAdmin()) return;
+  pdfimpResetState();
+  const wrap = document.createElement('div');
+  wrap.id = 'pdfimp-wrap';
+  wrap.innerHTML = `
+    <div class="modal-bg" onclick="closePdfImportModal()"></div>
+    <div class="modal-shell">
+      <div class="modal-card" role="dialog" aria-modal="true" style="max-width:800px;">
+        <div class="modal-header">
+          <div>
+            <div class="kpi-label mb-1">Data Realisasi PMB</div>
+            <div class="font-display text-[1.4rem] text-perbanas-blue-deep" style="font-weight:800;letter-spacing:-.02em;">Import PDF Realisasi PMB</div>
+            <div class="text-sm text-gray-500 mt-1.5">Unggah laporan PDF dari unit PMB — sistem membaca &amp; memperbarui realisasi secara otomatis.</div>
+          </div>
+          <button class="p-2 hover:bg-gray-100 rounded-lg" onclick="closePdfImportModal()" aria-label="Tutup">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="pdfimp-tabs">
+            <div class="pdfimp-tab ${PDFIMP_STATE.tab === 'import' ? 'active' : ''}" onclick="pdfimpSetTab('import')">Import Baru</div>
+            <div class="pdfimp-tab ${PDFIMP_STATE.tab === 'riwayat' ? 'active' : ''}" onclick="pdfimpSetTab('riwayat')">Riwayat Import</div>
+          </div>
+          <div id="pdfimp-body"></div>
+        </div>
+        <div class="modal-footer" id="pdfimp-footer"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  pdfimpRenderBody();
+  document.addEventListener('keydown', pdfimpKeyHandler);
+}
+function pdfimpKeyHandler(e) { if (e.key === 'Escape') closePdfImportModal(); }
+function closePdfImportModal() {
+  const w = $('#pdfimp-wrap'); if (w) w.remove();
+  document.removeEventListener('keydown', pdfimpKeyHandler);
+}
+function pdfimpSetTab(tab) { PDFIMP_STATE.tab = tab; pdfimpRenderBody(); }
+
+function pdfimpRenderBody() {
+  const body = $('#pdfimp-body'), footer = $('#pdfimp-footer');
+  if (!body || !footer) return;
+
+  if (PDFIMP_STATE.tab === 'riwayat') {
+    body.innerHTML = pdfimpRenderHistoryTab();
+    footer.innerHTML = `<div></div><button class="btn btn-primary" onclick="closePdfImportModal()">Tutup</button>`;
+    return;
+  }
+
+  if (PDFIMP_STATE.step === 'upload') {
+    body.innerHTML = pdfimpRenderUploadStep();
+    footer.innerHTML = `<div></div><button class="btn btn-ghost" onclick="closePdfImportModal()">Batal</button>`;
+    pdfimpBindDropzone();
+  } else if (PDFIMP_STATE.step === 'parsing') {
+    body.innerHTML = pdfimpRenderParsingStep();
+    footer.innerHTML = '';
+  } else if (PDFIMP_STATE.step === 'mapping') {
+    body.innerHTML = pdfimpRenderMappingStep();
+    footer.innerHTML = `<button class="btn btn-ghost" onclick="closePdfImportModal()">Batal</button><button class="btn btn-primary" onclick="pdfimpConfirmMapping()">Lanjutkan →</button>`;
+  } else if (PDFIMP_STATE.step === 'preview') {
+    body.innerHTML = pdfimpRenderPreviewStep();
+    footer.innerHTML = `<button class="btn btn-ghost" onclick="closePdfImportModal()">Batal</button><button class="btn btn-primary" onclick="pdfimpCommit()">Terapkan Update ke Dashboard</button>`;
+  } else if (PDFIMP_STATE.step === 'done') {
+    body.innerHTML = pdfimpRenderDoneStep();
+    footer.innerHTML = `<div></div><button class="btn btn-primary" onclick="closePdfImportModal()">Selesai</button>`;
+  } else if (PDFIMP_STATE.step === 'error') {
+    body.innerHTML = pdfimpRenderErrorStep();
+    footer.innerHTML = `<div></div><div class="flex gap-2"><button class="btn btn-ghost" onclick="closePdfImportModal()">Tutup</button><button class="btn btn-primary" onclick="pdfimpResetState(); pdfimpRenderBody();">Coba Lagi</button></div>`;
+  }
+}
+
+function pdfimpRenderUploadStep() {
+  return `
+    <div class="pdfimp-dropzone" id="pdfimp-dropzone" onclick="document.getElementById('pdfimp-file-input').click()">
+      <svg class="w-10 h-10 mx-auto mb-3" style="color:var(--perbanas-blue-deep)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+      <div class="font-semibold text-gray-800">Tarik &amp; lepas file PDF di sini</div>
+      <div class="text-sm text-gray-500 mt-1">atau klik untuk memilih file — parsing berjalan otomatis setelah file dipilih</div>
+      <div class="text-xs text-gray-400 mt-3">Format: Laporan Perbandingan Pendaftar &amp; NIM PMB (.pdf)</div>
+    </div>
+    <input type="file" id="pdfimp-file-input" accept=".pdf,application/pdf" class="hidden" onchange="pdfimpHandleFile(this.files[0])" />
+  `;
+}
+function pdfimpBindDropzone() {
+  const dz = $('#pdfimp-dropzone');
+  if (!dz) return;
+  ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); dz.classList.add('dragover'); }));
+  ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover'); }));
+  dz.addEventListener('drop', e => { const f = e.dataTransfer.files?.[0]; if (f) pdfimpHandleFile(f); });
+}
+
+function pdfimpRenderParsingStep() {
+  return `
+    <div class="text-center py-10">
+      <svg class="animate-spin w-8 h-8 mx-auto mb-3" style="color:var(--perbanas-blue-deep)" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+      <div class="font-semibold text-gray-700">Membaca &amp; memetakan data dari <span class="text-perbanas-blue-deep">${PDFIMP_STATE.fileName}</span>…</div>
+    </div>
+  `;
+}
+function pdfimpRenderErrorStep() {
+  return `
+    <div class="text-center py-8">
+      <div class="text-4xl mb-2">⚠️</div>
+      <div class="font-semibold text-gray-800 mb-1">Import PDF gagal</div>
+      <div class="text-sm text-gray-500 max-w-md mx-auto">${PDFIMP_STATE.errorMsg}</div>
+    </div>
+  `;
+}
+
+function pdfimpRenderMappingStep() {
+  const u = PDFIMP_STATE.unresolved;
+  return `
+    <div class="mb-3 text-sm text-gray-600">
+      <span class="pdfimp-badge-warn">${u.length} prodi perlu dipetakan</span>
+      &nbsp;Program Studi berikut tidak ditemukan secara pasti di database. Silakan lakukan mapping — pilihan akan disimpan sehingga import berikutnya tidak perlu memilih lagi.
+    </div>
+    <div style="max-height:48vh;overflow:auto;border:1px solid var(--perbanas-gray-200);border-radius:12px;">
+      <table class="pdfimp-table">
+        <thead><tr><th>Terbaca dari PDF</th><th>Kelas / Lokasi</th><th>Petakan ke Prodi</th></tr></thead>
+        <tbody>
+          ${u.map(item => `
+            <tr>
+              <td><div class="font-medium text-gray-800">${item.prodiRaw}</div></td>
+              <td class="text-gray-500">${item.kelas} · ${item.lokasi}</td>
+              <td>
+                <select onchange="pdfimpSetMappingChoice('${item.key}', this.value)">
+                  <option value="">— Abaikan baris ini —</option>
+                  ${item.candidates.map(c => `<option value="${c.code}" ${PDFIMP_STATE.unresolvedChoices[item.key] === c.code ? 'selected' : ''}>${c.label} (${c.code})</option>`).join('')}
+                </select>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function pdfimpSetMappingChoice(key, code) { PDFIMP_STATE.unresolvedChoices[key] = code; }
+function pdfimpConfirmMapping() {
+  const persistedMap = pdfimpGetPersistedMap();
+  for (const item of PDFIMP_STATE.unresolved) {
+    const chosen = PDFIMP_STATE.unresolvedChoices[item.key];
+    if (chosen) {
+      persistedMap[item.key] = chosen;
+      const cand = item.candidates.find(c => c.code === chosen);
+      PDFIMP_STATE.resolved.push({ key: item.key, kelas: item.kelas, lokasi: item.lokasi, prodiCode: chosen, prodiLabel: cand ? cand.label : prodiFull(chosen), prodiRaw: item.prodiRaw, values: item.values, mapMethod: 'manual' });
+    }
+    // chosen === '' → baris diabaikan (tidak ditulis ke data maupun mapping)
+  }
+  pdfimpSavePersistedMap(persistedMap);
+  PDFIMP_STATE.step = 'preview';
+  pdfimpRenderBody();
+}
+
+function pdfimpRenderPreviewStep() {
+  const r = PDFIMP_STATE.resolved;
+  let totalP = 0, totalN = 0;
+  r.forEach(item => Object.keys(item.values).forEach(b => { totalP += item.values[b].pendaftar || 0; totalN += item.values[b].nim || 0; }));
+  return `
+    <div class="pdfimp-summary-grid mb-4">
+      <div class="pdfimp-summary-card"><div class="lbl">Tahun Data</div><div class="val">${PDFIMP_STATE.importYear}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Prodi Terpetakan</div><div class="val">${r.length}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Total Pendaftar</div><div class="val">${fmtNum(totalP)}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Total NIM</div><div class="val">${fmtNum(totalN)}</div></div>
+    </div>
+    ${PDFIMP_STATE.warnings.length ? `
+      <div class="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+        ⚠ ${PDFIMP_STATE.warnings.length} peringatan saat parsing (baris/angka diabaikan) — <span class="underline cursor-pointer" onclick="pdfimpToggleWarnDetail()">lihat detail</span>
+        <div id="pdfimp-warn-detail" class="hidden mt-1.5 space-y-0.5">${PDFIMP_STATE.warnings.map(w => `<div>• ${w}</div>`).join('')}</div>
+      </div>` : ''}
+    <div style="max-height:42vh;overflow:auto;border:1px solid var(--perbanas-gray-200);border-radius:12px;">
+      <table class="pdfimp-table">
+        <thead><tr><th>Kelas</th><th>Lokasi</th><th>Prodi</th><th>Batch</th><th>Pendaftar (baru)</th><th>NIM (baru)</th></tr></thead>
+        <tbody>
+          ${r.flatMap(item => Object.keys(item.values).map(b => {
+            const row = STATE.data.rows.find(x => x.kelas === item.kelas && x.lokasi === item.lokasi && x.prodi === item.prodiCode);
+            const old = row?.batches?.[PDFIMP_STATE.importYear]?.[b];
+            const oldTxt = old ? `${fmtNum(old.pendaftar)} / ${fmtNum(old.nim)}` : '—';
+            return `<tr>
+              <td>${item.kelas}</td><td>${item.lokasi}</td>
+              <td>${item.prodiLabel} <span class="text-gray-400">(${item.prodiCode})</span></td>
+              <td>${b}</td>
+              <td>${fmtNum(item.values[b].pendaftar)} <span class="text-gray-400 text-[11px]">(sblm: ${oldTxt})</span></td>
+              <td>${fmtNum(item.values[b].nim)}</td>
+            </tr>`;
+          })).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="text-xs text-gray-400 mt-2.5">Hanya nilai <em>pendaftar</em> &amp; <em>NIM</em> yang diperbarui. Target, proyeksi, pacing, dan skenario tidak berubah.</div>
+  `;
+}
+function pdfimpToggleWarnDetail() { $('#pdfimp-warn-detail')?.classList.toggle('hidden'); }
+
+function pdfimpCommit() {
+  try {
+    const result = pdfimpApply(PDFIMP_STATE.resolved, PDFIMP_STATE.importYear);
+    STATE.data.meta.lastUpdated = new Date().toISOString().slice(0, 10);
+    syncAllDerived(STATE.data);
+    saveData(true);
+    clearDirty();
+
+    const now = new Date();
+    const histEntry = {
+      id: 'pdfimp_' + now.getTime(),
+      tanggal: now.toISOString().slice(0, 10),
+      jam: now.toTimeString().slice(0, 5),
+      fileName: PDFIMP_STATE.fileName,
+      tahun: PDFIMP_STATE.importYear,
+      program: [...new Set(PDFIMP_STATE.resolved.map(r => r.kelas))].join(', ') || '—',
+      lokasi: [...new Set(PDFIMP_STATE.resolved.map(r => r.lokasi))].join(', ') || '—',
+      periode: [...new Set(PDFIMP_STATE.resolved.flatMap(r => Object.keys(r.values)))].join(', ') || '—',
+      jumlahProdi: PDFIMP_STATE.resolved.length,
+      berhasil: result.touchedRowsCount,
+      gagal: PDFIMP_STATE.resolved.length - result.touchedRowsCount,
+      totalPendaftar: result.totalPendaftar,
+      totalNim: result.totalNim,
+      status: 'sukses',
+    };
+    pdfimpAddHistoryEntry(histEntry);
+    PDFIMP_STATE.applyResult = { ...result, histEntry };
+    PDFIMP_STATE.step = 'done';
+
+    // Refresh SELURUH dashboard lewat jalur navigate() yang sudah ada — KPI, seluruh
+    // chart, tabel, insight, proyeksi, dan laporan otomatis mengikuti karena semuanya
+    // dihitung ulang dari STATE.data setiap kali halaman dirender.
+    applyRoleUI();
+    navigate(STATE.page);
+    pdfimpRenderBody(); // modal ada di document.body terpisah dari #pages, jadi tetap tampil setelah navigate()
+    toast('Realisasi PMB berhasil diperbarui dari PDF', 'success');
+  } catch (err) {
+    console.error('[ImportPDF] gagal menerapkan update:', err);
+    PDFIMP_STATE.errorMsg = 'Gagal menerapkan update ke dashboard: ' + (err.message || err);
+    PDFIMP_STATE.step = 'error';
+    pdfimpRenderBody();
+  }
+}
+
+function pdfimpRenderDoneStep() {
+  const h = PDFIMP_STATE.applyResult.histEntry;
+  return `
+    <div class="text-center py-3 mb-2">
+      <div class="text-4xl mb-2">✅</div>
+      <div class="font-display text-lg font-extrabold text-perbanas-blue-deep">Import Berhasil</div>
+    </div>
+    <div class="pdfimp-summary-grid mb-3">
+      <div class="pdfimp-summary-card"><div class="lbl">Tanggal</div><div class="val" style="font-size:1rem;">${formatDate(h.tanggal)} · ${h.jam}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Program</div><div class="val" style="font-size:1rem;">${h.program}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Lokasi</div><div class="val" style="font-size:1rem;">${h.lokasi}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Periode</div><div class="val" style="font-size:1rem;">${h.periode}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Jumlah Prodi</div><div class="val">${h.jumlahProdi}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Berhasil / Gagal</div><div class="val" style="font-size:1rem;">${h.berhasil} / ${h.gagal}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Total Pendaftar</div><div class="val">${fmtNum(h.totalPendaftar)}</div></div>
+      <div class="pdfimp-summary-card"><div class="lbl">Total NIM</div><div class="val">${fmtNum(h.totalNim)}</div></div>
+    </div>
+    <div class="text-xs text-gray-400">Seluruh dashboard (KPI, grafik, tabel, insight, proyeksi, laporan) telah diperbarui otomatis. Ekspor JSON &amp; push ke GitHub agar perubahan permanen.</div>
+  `;
+}
+
+function pdfimpRenderHistoryTab() {
+  const list = pdfimpGetHistory();
+  if (!list.length) return `<div class="text-center text-sm text-gray-400 py-10">Belum ada riwayat import PDF.</div>`;
+  return `
+    <div class="flex justify-end mb-2">
+      <button class="btn btn-ghost text-xs" style="padding:.35rem .7rem;" onclick="pdfimpClearHistoryConfirm()">Hapus Semua Riwayat</button>
+    </div>
+    <div class="ovr-list">
+      ${list.map(h => `
+        <div class="pdfimp-hist-row">
+          <div>
+            <div class="font-medium text-gray-800">${h.fileName} <span class="pdfimp-badge-ok">${h.status}</span></div>
+            <div class="text-gray-500 text-xs mt-0.5">${formatDate(h.tanggal)} · ${h.jam} — ${h.program} · ${h.lokasi} · ${h.periode} (${h.tahun})</div>
+            <div class="text-gray-400 text-xs mt-0.5">${h.jumlahProdi} prodi · Pendaftar ${fmtNum(h.totalPendaftar)} · NIM ${fmtNum(h.totalNim)}</div>
+          </div>
+          <button class="p-1.5 hover:bg-red-50 rounded-lg text-red-500" title="Hapus" onclick="pdfimpDeleteHistoryEntry('${h.id}'); pdfimpRenderBody();">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/** Titik masuk saat file PDF dipilih (drag-drop maupun klik) — langsung parsing, tanpa convert manual. */
+async function pdfimpHandleFile(file) {
+  if (!file) return;
+  if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+    toast('File harus berformat PDF', 'error');
+    return;
+  }
+  PDFIMP_STATE.fileName = file.name;
+  PDFIMP_STATE.step = 'parsing';
+  pdfimpRenderBody();
+
+  // requestAnimationFrame agar UI "parsing..." sempat ter-render sebelum kerja berat dimulai
+  await new Promise(res => requestAnimationFrame(res));
+  const t0 = performance.now();
+  try {
+    if (!window.pdfjsLib) throw new Error('Pustaka PDF.js gagal dimuat. Periksa koneksi internet lalu coba lagi.');
+    const buf = await file.arrayBuffer();
+    const pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+    const pages = await pdfimpExtractRows(pdfDoc);
+    const { rawExtract, warnings, importYearGuess, sawAnyTable } = pdfimpParse(pages);
+
+    if (!sawAnyTable || rawExtract.length === 0) {
+      throw new Error('Tabel realisasi tidak ditemukan pada PDF ini. Pastikan file sesuai format Laporan Perbandingan Pendaftar & NIM dari unit PMB.');
+    }
+
+    PDFIMP_STATE.warnings = warnings;
+    PDFIMP_STATE.importYear = (importYearGuess && YEARS.includes(importYearGuess)) ? importYearGuess : YEARS[YEARS.length - 1];
+
+    const groups = pdfimpGroupRaw(rawExtract);
+    const persistedMap = pdfimpGetPersistedMap();
+    const { resolved, unresolved } = pdfimpResolveGroups(groups, persistedMap);
+    PDFIMP_STATE.resolved = resolved;
+    PDFIMP_STATE.unresolved = unresolved;
+    unresolved.forEach(u => { PDFIMP_STATE.unresolvedChoices[u.key] = u.defaultCode || ''; });
+
+    console.debug('[ImportPDF] parsing selesai dalam', Math.round(performance.now() - t0), 'ms —', rawExtract.length, 'baris terbaca.');
+
+    PDFIMP_STATE.step = unresolved.length ? 'mapping' : 'preview';
+    pdfimpRenderBody();
+  } catch (err) {
+    console.error('[ImportPDF] gagal parsing:', err);
+    PDFIMP_STATE.errorMsg = err.message || 'Terjadi kesalahan tak terduga saat membaca PDF.';
+    PDFIMP_STATE.step = 'error';
+    pdfimpRenderBody();
+  }
+}
+</script>
+
+<script>
 /* ============== ANALISA BATCH ============== */
 
 // Aggregate per (kelas × batch) for a given year, using row-level batches data.
@@ -5982,38 +6742,51 @@ function cleanLogo(b64) {
 }
 
 async function syncRemote() {
-  // Auto-update: ambil JSON terbaru dari folder yang sama dengan dashboard (mis. GitHub Pages).
-  // Dilewati bila admin punya editan lokal yang belum diekspor (dirty flag).
   try {
-    if (localStorage.getItem('pmb_data_dirty') === '1') return;
-  // Mengambil data dari Supabase (bukan lagi dari file JSON)
-  const res = await fetch(
-    SUPABASE_URL + "/rest/v1/pmb_snapshot?id=eq.1&select=data",
-    {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + SUPABASE_KEY
-      },
-      cache: "no-store"
+    // Cache-buster memastikan GitHub Pages/CDN tidak memberikan JSON lama.
+    const separator = DATA_URL.includes('?') ? '&' : '?';
+    const url = `${DATA_URL}${separator}v=${Date.now()}`;
+
+    const res = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' }
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} saat mengambil ${DATA_URL}`);
     }
-  );
-  if (!res.ok) return;
-  const hasil = await res.json();        // hasil berupa daftar berisi 1 baris
-  const obj = hasil[0] ? hasil[0].data : null;   // ambil isi kolom "data"
-    if (!obj || !Array.isArray(obj.rows)) return;
+
+    const obj = await res.json();
+    if (!obj || !Array.isArray(obj.rows) || obj.rows.length === 0) {
+      throw new Error('Struktur JSON tidak valid atau rows kosong');
+    }
+
     migrateData(obj);
     if (!obj.meta) obj.meta = clone(DEFAULT_DATA.meta);
     if (!obj.pacing) obj.pacing = clone(DEFAULT_DATA.pacing);
     if (!obj.prodi_fullname) obj.prodi_fullname = clone(DEFAULT_DATA.prodi_fullname);
     if (!obj.projection_scenarios) obj.projection_scenarios = clone(DEFAULT_DATA.projection_scenarios);
     syncAllDerived(obj);
-    if (JSON.stringify(obj) === JSON.stringify(STATE.data)) return; // tidak berubah
+
+    const berubah = JSON.stringify(obj) !== JSON.stringify(STATE.data);
     STATE.data = obj;
-    saveData(true);
+
+    // Simpan sebagai fallback jika berikutnya sedang offline.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE.data));
     clearDirty();
-    if (STATE.role) { applyRoleUI(); navigate(STATE.page); }
-    toast('Data terbaru dimuat dari server', 'success');
-  } catch (e) { /* offline / dibuka via file:// — pakai data lokal */ }
+
+    if (STATE.role && berubah) {
+      applyRoleUI();
+      navigate(STATE.page || 'overview');
+    }
+
+    if (berubah) toast('Data terbaru dimuat dari JSON GitHub', 'success');
+    console.info('Sumber data dashboard:', DATA_URL);
+  } catch (e) {
+    // Bila offline atau JSON gagal dibaca, dashboard tetap memakai cache lokal/default.
+    console.error('Gagal memuat JSON GitHub. Menggunakan data lokal.', e);
+  }
 }
 
 async function init() {
@@ -6033,7 +6806,7 @@ async function init() {
     e.preventDefault();
     const pwd = $('#admin-pwd').value;
     const email = $('#admin-email').value;
-    const ok = await tryAdminLogin(pwd) && await loginSupabase(email, pwd);
+    const ok = await loginSupabase(email, pwd);
     if (ok) {
       $('#login-error').classList.add('hidden');
       loginAs('admin');
@@ -6058,7 +6831,7 @@ async function init() {
   // Start live clock
   startLiveClock();
 
-  // Coba update data dari GitHub (non-blocking)
+  // Ambil JSON terbaru dari GitHub Pages (non-blocking)
   syncRemote();
 }
 
